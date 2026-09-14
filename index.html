@@ -339,10 +339,7 @@ async function load(){
     else { const j = await r.json(); sha = j.sha; trades = JSON.parse(b64d(j.content) || "[]"); }
     demo = false;
     setStatus(token() ? "synced" : "idle", token() ? `${repo()} 동기화됨` : "읽기 전용 (토큰 없음)");
-    note(token() ? "" : '<b>읽기 전용</b> 기록하려면 토큰을 한 번 연결하세요. <button class="ghost" onclick="openSettings()">연결하기</button>');
-    if(!token() && !sessionStorage.getItem("tape.asked")){   // 첫 방문이면 바로 안내창
-      sessionStorage.setItem("tape.asked", "1"); openSettings();
-    }
+    note(token() ? "" : '<b>보기 전용</b> 이 브라우저에서 직접 기록하려면 <button class="ghost" onclick="openSettings()">토큰 연결</button>');
   }catch(e){
     setStatus("error", "불러오기 실패");
     note("불러오지 못했습니다 — " + esc(e.message), true);
