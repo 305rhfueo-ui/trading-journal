@@ -213,6 +213,7 @@ kbd{font-family:"IBM Plex Mono",monospace; font-size:11px; border:1px solid var(
       </div>
       <div class="field"><label for="memo">메모</label><textarea id="memo" name="memo" placeholder="왜 샀고 왜 팔았는지"></textarea></div>
       <button class="submit" id="submit" type="submit">기록하고 커밋</button>
+      <p class="hint" id="need-setup" hidden style="margin:8px 0 0">기록하려면 <b>설정</b>에서 저장소와 쓰기 토큰을 먼저 넣으세요.</p>
     </form>
   </div>
 </div>
@@ -478,7 +479,7 @@ function render(){
   $("#tags").innerHTML = tags.map(t => `<option value="${esc(t)}">`).join("");
   const list = filtered(), s = stats(closed(list));
   renderStats(s, list.filter(isOpen).length); renderChart(s); renderTable(list, s);
-  $("#submit").disabled = !token() || !repo() || demo;
+  $("#need-setup").hidden = !!(token() && repo());
 }
 
 /* ---------- 이벤트 ---------- */
@@ -511,6 +512,13 @@ $("#cancel-edit").addEventListener("click", cancelEdit);
 
 $("#form").addEventListener("submit", async e => {
   e.preventDefault();
+  if(!token() || !repo()){                       // 죽은 버튼 대신 바로 설정으로
+    note("기록하려면 저장소와 쓰기 토큰이 필요합니다. 설정 창을 열었습니다.", true);
+    $("#s-repo").value = repo(); $("#s-token").value = token();
+    $("#settings").showModal();
+    return;
+  }
+  if(demo){ trades = []; demo = false; note(""); }   // 예시 데이터는 버리고 진짜 기록만 저장
   const f = Object.fromEntries(new FormData(e.target));
   if(!!f.exitDate !== !!f.exitPrice){ note("청산일과 청산가는 같이 넣거나 같이 비워야 합니다.", true); return; }
   if(f.exitDate && f.exitDate < f.entryDate){ note("청산일이 진입일보다 빠릅니다.", true); return; }
