@@ -131,6 +131,13 @@ dialog::backdrop{background:rgba(10,14,20,.45)}
 dialog h2{margin:0 0 4px; font-size:15px}
 dialog p{margin:0 0 14px; font-size:12.5px; color:var(--muted)}
 dialog a{color:var(--brass)}
+.steps{margin:0 0 14px; padding-left:18px; font-size:12.5px; color:var(--muted)}
+.steps li{margin-bottom:10px}
+.steps span{display:block; margin-top:3px}
+.steps b{color:var(--ink)}
+.bigbtn{display:inline-block; background:var(--ink); color:var(--surface); text-decoration:none;
+  border-radius:6px; padding:7px 12px; font-size:12.5px; font-weight:600}
+details summary{font-size:12px; color:var(--muted); cursor:pointer}
 .dlg-actions{display:flex; gap:8px; justify-content:flex-end; margin-top:14px}
 
 footer{margin-top:30px; color:var(--muted); font-size:12px; display:flex; flex-wrap:wrap; gap:6px 16px}
@@ -226,14 +233,19 @@ kbd{font-family:"IBM Plex Mono",monospace; font-size:11px; border:1px solid var(
 
 <dialog id="settings">
   <form method="dialog" id="settings-form">
-    <h2>저장소 · 토큰</h2>
-    <p>기록은 이 저장소의 <code>trades.json</code>에 커밋됩니다. 토큰은 이 브라우저에만 저장되고 커밋되지 않습니다.</p>
-    <div class="field"><label for="s-repo">저장소</label>
-      <input id="s-repo" placeholder="username/trading-journal" autocomplete="off"></div>
-    <div class="field"><label for="s-token">쓰기 토큰 (fine-grained PAT)</label>
-      <input id="s-token" type="password" placeholder="github_pat_…" autocomplete="off"></div>
-    <p><a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener">토큰 만들기</a>
-      → Repository access: 이 저장소 하나 → Permissions ▸ Contents: <b>Read and write</b></p>
+    <h2>한 번만 연결하면 끝</h2>
+    <p>브라우저마다 딱 한 번. 토큰은 이 브라우저에만 저장되고 저장소에는 올라가지 않습니다.</p>
+    <ol class="steps">
+      <li><a class="bigbtn" href="https://github.com/settings/tokens/new?scopes=public_repo&amp;description=%EB%A7%A4%EB%A7%A4%EC%9D%BC%EC%A7%80%20Tape" target="_blank" rel="noopener">GitHub에서 토큰 만들기 ↗</a>
+        <span>권한은 이미 체크돼 있음 — 맨 아래 <b>Generate token</b>만 누르면 됩니다.</span></li>
+      <li>만들어진 <code>ghp_…</code>를 복사해서 아래 붙여넣기</li>
+    </ol>
+    <div class="field"><label for="s-token">토큰</label>
+      <input id="s-token" type="password" placeholder="ghp_…" autocomplete="off"></div>
+    <details><summary>저장소를 직접 지정</summary>
+      <div class="field" style="margin-top:8px"><label for="s-repo">사용자명/저장소명</label>
+        <input id="s-repo" placeholder="username/trading-journal" autocomplete="off"></div>
+    </details>
     <div class="dlg-actions">
       <button class="ghost" type="button" id="s-clear">토큰 삭제</button>
       <button class="submit" type="submit" style="width:auto">저장</button>
@@ -325,7 +337,10 @@ async function load(){
     else { const j = await r.json(); sha = j.sha; trades = JSON.parse(b64d(j.content) || "[]"); }
     demo = false;
     setStatus(token() ? "synced" : "idle", token() ? `${repo()} 동기화됨` : "읽기 전용 (토큰 없음)");
-    note(token() ? "" : '<b>읽기 전용</b> 기록하려면 <b>설정</b>에서 쓰기 토큰을 넣으세요.');
+    note(token() ? "" : '<b>읽기 전용</b> 기록하려면 토큰을 한 번 연결하세요. <button class="ghost" onclick="openSettings()">연결하기</button>');
+    if(!token() && !sessionStorage.getItem("tape.asked")){   // 첫 방문이면 바로 안내창
+      sessionStorage.setItem("tape.asked", "1"); openSettings();
+    }
   }catch(e){
     setStatus("error", "불러오기 실패");
     note("불러오지 못했습니다 — " + esc(e.message), true);
@@ -513,9 +528,8 @@ $("#cancel-edit").addEventListener("click", cancelEdit);
 $("#form").addEventListener("submit", async e => {
   e.preventDefault();
   if(!token() || !repo()){                       // 죽은 버튼 대신 바로 설정으로
-    note("기록하려면 저장소와 쓰기 토큰이 필요합니다. 설정 창을 열었습니다.", true);
-    $("#s-repo").value = repo(); $("#s-token").value = token();
-    $("#settings").showModal();
+    note("먼저 토큰을 한 번 연결해야 저장됩니다.", true);
+    openSettings();
     return;
   }
   if(demo){ trades = []; demo = false; note(""); }   // 예시 데이터는 버리고 진짜 기록만 저장
@@ -557,10 +571,11 @@ document.addEventListener("click", async e => {
 
 ["#f-q","#f-tag","#f-side","#f-period"].forEach(s => $(s).addEventListener("input", render));
 
-$("#open-settings").addEventListener("click", () => {
-  $("#s-repo").value = repo(); $("#s-token").value = token();
+function openSettings(){
+  $("#s-repo").value = localStorage.getItem(LS_REPO) || ""; $("#s-token").value = token();
   $("#settings").showModal();
-});
+}
+$("#open-settings").addEventListener("click", openSettings);
 $("#settings-form").addEventListener("submit", () => {
   localStorage.setItem(LS_REPO, $("#s-repo").value.trim().replace(/^https?:\/\/github\.com\//, "").replace(/\/$/, ""));
   const tk = $("#s-token").value.trim();

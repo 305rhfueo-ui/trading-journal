@@ -9,16 +9,18 @@
 2. **Settings ▸ Pages ▸ Source = GitHub Actions** 선택.
 3. `https://<사용자명>.github.io/<저장소명>/` 접속.
 
-## 기록하려면 (쓰기 토큰)
+## 기록하려면 (한 번만)
 
-읽기는 로그인 없이 되고, **기록할 때만** 토큰이 필요하다.
+읽기는 로그인 없이 되고, **기록할 때만** 토큰이 필요하다. 사이트를 처음 열면 연결 창이 자동으로 뜬다.
 
-1. [fine-grained PAT 만들기](https://github.com/settings/personal-access-tokens/new)
-   → Repository access: **이 저장소 하나만** → Permissions ▸ Contents: **Read and write**
-2. 사이트 오른쪽 위 **설정** → 저장소(`사용자명/저장소명`)와 토큰 입력.
+1. 창 안의 **GitHub에서 토큰 만들기** 버튼 → 권한이 미리 체크된 페이지가 열린다 → 맨 아래 **Generate token**.
+2. 나온 `ghp_…`를 복사해서 창에 붙여넣고 **저장**.
 
-토큰은 브라우저 `localStorage`에만 남고 저장소에는 커밋되지 않는다. 기기마다 한 번씩 넣으면 된다.
-(로컬에서 `index.html`을 그냥 열어서 써도 똑같이 동작한다.)
+끝. 저장소 이름은 주소에서 자동으로 잡는다. 토큰은 브라우저 `localStorage`에만 남고 저장소에는 커밋되지 않는다.
+기기(브라우저)마다 한 번씩만 하면 된다. 토큰을 지우려면 창의 **토큰 삭제**, GitHub 쪽에서 끊으려면
+[토큰 목록](https://github.com/settings/tokens)에서 Delete.
+
+(로컬에서 `index.html`을 그냥 열어서 써도 똑같이 동작한다. 그때는 저장소 이름만 창에서 직접 넣어주면 된다.)
 
 ## 쓰는 법
 
