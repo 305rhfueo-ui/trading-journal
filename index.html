@@ -95,6 +95,9 @@ button{font:inherit; cursor:pointer}
 .seg input{position:absolute; opacity:0; width:0; height:0}
 .seg span{display:block; padding:7px 0}
 .seg label:has(input:checked) span{background:var(--ink); color:var(--surface)}
+.hint{margin:-4px 0 10px; font-size:11.5px; color:var(--muted)}
+.hint b{color:var(--brass)}
+.open{color:var(--brass); border-color:var(--brass); background:var(--brass-soft)}
 
 .filters{display:flex; flex-wrap:wrap; gap:8px; padding:10px 12px; border-bottom:1px solid var(--line-soft)}
 .filters input,.filters select{width:auto; min-width:96px; padding:5px 8px; font-size:12.5px}
@@ -105,7 +108,10 @@ th{font-size:10.5px; letter-spacing:.08em; text-transform:uppercase; color:var(-
 th:first-child,td:first-child{text-align:left; padding-left:16px}
 th.l,td.l{text-align:left}
 td{padding:9px 10px; text-align:right; border-bottom:1px solid var(--line-soft); white-space:nowrap}
+tbody tr{cursor:pointer}
 tbody tr:hover{background:var(--surface-2)}
+tbody tr.editing{background:var(--brass-soft)}
+tbody tr.editing td:first-child{box-shadow:inset 3px 0 0 var(--brass)}
 .tick{font-family:"IBM Plex Mono",monospace; font-weight:600; letter-spacing:.02em}
 .side{font-size:10.5px; padding:1px 5px; border-radius:4px; border:1px solid var(--line); color:var(--muted)}
 .side.s{color:var(--down); border-color:var(--down); background:var(--down-soft)}
@@ -175,7 +181,10 @@ kbd{font-family:"IBM Plex Mono",monospace; font-size:11px; border:1px solid var(
   </div>
 
   <div class="panel">
-    <div class="panel-hd"><h2>거래 기록</h2></div>
+    <div class="panel-hd">
+      <h2 id="form-title">거래 기록</h2>
+      <button class="ghost" type="button" id="cancel-edit" hidden>수정 취소</button>
+    </div>
     <form id="form">
       <div class="row2">
         <div class="field"><label for="ticker">종목</label>
@@ -193,9 +202,10 @@ kbd{font-family:"IBM Plex Mono",monospace; font-size:11px; border:1px solid var(
         <div class="field"><label for="entryPrice">진입가 $</label><input id="entryPrice" name="entryPrice" type="number" step="any" min="0" required></div>
       </div>
       <div class="row2">
-        <div class="field"><label for="exitDate">청산일</label><input id="exitDate" name="exitDate" type="date" required></div>
-        <div class="field"><label for="exitPrice">청산가 $</label><input id="exitPrice" name="exitPrice" type="number" step="any" min="0" required></div>
+        <div class="field"><label for="exitDate">청산일</label><input id="exitDate" name="exitDate" type="date"></div>
+        <div class="field"><label for="exitPrice">청산가 $</label><input id="exitPrice" name="exitPrice" type="number" step="any" min="0"></div>
       </div>
+      <p class="hint">청산 칸을 비워두면 <b>보유 중</b>으로 남습니다. 나중에 왼쪽 표에서 그 줄을 눌러 채우세요.</p>
       <div class="row2">
         <div class="field"><label for="fees">수수료 $</label><input id="fees" name="fees" type="number" step="any" min="0" placeholder="0"></div>
         <div class="field"><label for="tag">전략</label>
@@ -235,9 +245,11 @@ const $ = s => document.querySelector(s);
 const LS_TOKEN = "tape.token", LS_REPO = "tape.repo";
 
 /* ---------- 계산 (순수 함수) ---------- */
+const isOpen = t => !t.exitDate || t.exitPrice == null;          // 아직 안 판 것 = 보유 중
+const closed = list => list.filter(t => !isOpen(t));              // 실현 손익 계산 대상
 const pnl = t => (t.side === "short" ? -1 : 1) * (t.exitPrice - t.entryPrice) * t.qty - (t.fees || 0);
 const pct = t => pnl(t) / (t.entryPrice * t.qty) * 100;
-const held = t => Math.max(0, Math.round((new Date(t.exitDate) - new Date(t.entryDate)) / 864e5));
+const held = t => Math.max(0, Math.round(((isOpen(t) ? Date.now() : new Date(t.exitDate)) - new Date(t.entryDate)) / 864e5));
 const usd = n => (n < 0 ? "−$" : "$") + Math.abs(n).toLocaleString("en-US", {minimumFractionDigits:2, maximumFractionDigits:2});
 const sgn = n => (n > 0 ? "+" : n < 0 ? "−" : "") + Math.abs(n).toFixed(2);
 const cls = n => n > 0 ? "up" : n < 0 ? "down" : "";
@@ -271,7 +283,7 @@ function stats(list){
 }
 
 /* ---------- 상태 ---------- */
-let trades = [], sha = null, demo = false;
+let trades = [], sha = null, demo = false, editing = null;
 const repo = () => localStorage.getItem(LS_REPO) ||
   (location.hostname.endsWith("github.io")
     ? location.hostname.split(".")[0] + "/" + (location.pathname.split("/")[1] || "")
@@ -351,11 +363,13 @@ async function save(message){
 }
 
 /* ---------- 렌더 ---------- */
-function renderStats(s){
+function renderStats(s, openCount = 0){
   const tile = (k,v,h,c="") => `<div class="tile"><div class="k">${k}</div><div class="v num ${c}">${v}</div><div class="h">${h}</div></div>`;
+  const openNote = openCount ? `<span>보유 중 <b class="num">${openCount}건</b> (손익 미반영)</span>` : "";
   if(!s.n){
-    $("#tiles").innerHTML = ["승률","총 실현손익","손익비","평균 손익률"].map(k => tile(k, "–", "거래 없음")).join("");
-    $("#minor").textContent = "";
+    $("#tiles").innerHTML = ["승률","총 실현손익","손익비","평균 손익률"]
+      .map(k => tile(k, "–", openCount ? "청산된 거래 없음" : "거래 없음")).join("");
+    $("#minor").innerHTML = openNote;
     return;
   }
   $("#tiles").innerHTML =
@@ -368,7 +382,7 @@ function renderStats(s){
     `<span>최대 낙폭 <b class="num down">−${usd(s.mdd)}</b></span>` +
     `<span>최대 연속 손실 <b class="num">${s.worst}회</b></span>` +
     `<span>평균 보유 <b class="num">${s.avgHold.toFixed(1)}일</b></span>` +
-    `<span>최고 수익 <b class="num up">${sgn(s.best)}% · ${esc(s.bestTicker)}</b></span>`;
+    `<span>최고 수익 <b class="num up">${sgn(s.best)}% · ${esc(s.bestTicker)}</b></span>` + openNote;
 }
 
 function renderChart(s){
@@ -403,23 +417,30 @@ function renderChart(s){
 }
 
 function renderTable(list, s){
+  const openCount = list.filter(isOpen).length;
   if(!list.length){
     $("#table").innerHTML = `<tbody><tr><td class="empty">${trades.length
       ? "조건에 맞는 거래가 없습니다."
       : '아직 기록이 없습니다. 오른쪽 폼으로 첫 거래를 남기세요. <button class="ghost" id="load-demo">예시로 둘러보기</button>'}</td></tr></tbody>`;
     return;
   }
-  const rows = list.slice().sort((a,b) => a.exitDate < b.exitDate ? 1 : -1).map(t => {
-    const p = pnl(t), c = pct(t);
-    return `<tr>
+  // 보유 중이 위, 그 아래 청산분을 최신순으로
+  const order = list.slice().sort((a,b) =>
+    isOpen(a) !== isOpen(b) ? (isOpen(a) ? -1 : 1)
+    : isOpen(a) ? (a.entryDate < b.entryDate ? 1 : -1)
+    : (a.exitDate < b.exitDate ? 1 : -1));
+  const rows = order.map(t => {
+    const op = isOpen(t), p = op ? 0 : pnl(t), c = op ? 0 : pct(t);
+    return `<tr data-id="${t.id}" class="${editing === t.id ? "editing" : ""}" title="클릭하면 수정">
       <td class="l"><span class="tick">${esc(t.ticker)}</span> <span class="side ${t.side === "short" ? "s" : ""}">${t.side === "short" ? "숏" : "롱"}</span></td>
       <td class="num">${t.qty}</td>
-      <td class="num">${t.entryDate.slice(2)} → ${t.exitDate.slice(5)}</td>
+      <td class="num">${t.entryDate.slice(2)} → ${op ? "보유 중" : t.exitDate.slice(5)}</td>
       <td class="num">${held(t)}일</td>
       <td class="num">${t.entryPrice.toFixed(2)}</td>
-      <td class="num">${t.exitPrice.toFixed(2)}</td>
-      <td class="num ${cls(p)}">${usd(p)}</td>
-      <td><span class="pill ${p > 0 ? "w" : "l"} num">${sgn(c)}%</span></td>
+      <td class="num">${op ? "–" : t.exitPrice.toFixed(2)}</td>
+      <td class="num ${op ? "" : cls(p)}">${op ? "–" : usd(p)}</td>
+      <td>${op ? '<span class="pill" style="background:var(--brass-soft);color:var(--brass)">미청산</span>'
+                : `<span class="pill ${p > 0 ? "w" : "l"} num">${sgn(c)}%</span>`}</td>
       <td class="l"><span class="tag">${esc(t.tag) || "–"}</span></td>
       <td class="l memo" title="${esc(t.memo)}">${esc(t.memo)}</td>
       <td><button class="del" data-id="${t.id}" title="삭제" aria-label="${esc(t.ticker)} 거래 삭제">×</button></td>
@@ -431,7 +452,7 @@ function renderTable(list, s){
       <th>손익</th><th class="l">수익률</th><th class="l">전략</th><th class="l">메모</th><th></th>
     </tr></thead>
     <tbody>${rows}</tbody>
-    <tfoot><tr><td class="l">합계 ${list.length}건</td><td colspan="5"></td>
+    <tfoot><tr><td class="l">청산 ${list.length - openCount}건${openCount ? ` · 보유 중 ${openCount}건` : ""}</td><td colspan="5"></td>
       <td class="num ${cls(s.total)}">${usd(s.total)}</td><td colspan="3"></td></tr></tfoot>`;
 }
 
@@ -442,8 +463,9 @@ function filtered(){
     if(q && !t.ticker.toUpperCase().includes(q)) return false;
     if(tag && t.tag !== tag) return false;
     if(side && t.side !== side) return false;
-    if(per === "ytd" && t.exitDate.slice(0,4) !== String(new Date().getFullYear())) return false;
-    if(per === "90" && now - new Date(t.exitDate) > 90 * 864e5) return false;
+    const when = t.exitDate || t.entryDate;   // 보유 중이면 진입일 기준
+    if(per === "ytd" && when.slice(0,4) !== String(new Date().getFullYear())) return false;
+    if(per === "90" && now - new Date(when) > 90 * 864e5) return false;
     return true;
   });
 }
@@ -454,35 +476,73 @@ function render(){
   $("#f-tag").innerHTML = `<option value="">전략 전체</option>` +
     tags.map(t => `<option${t === cur ? " selected" : ""}>${esc(t)}</option>`).join("");
   $("#tags").innerHTML = tags.map(t => `<option value="${esc(t)}">`).join("");
-  const list = filtered(), s = stats(list);
-  renderStats(s); renderChart(s); renderTable(list, s);
-  $("#submit").disabled = !token() || !repo();
+  const list = filtered(), s = stats(closed(list));
+  renderStats(s, list.filter(isOpen).length); renderChart(s); renderTable(list, s);
+  $("#submit").disabled = !token() || !repo() || demo;
 }
 
 /* ---------- 이벤트 ---------- */
+function startEdit(id){
+  const t = trades.find(x => x.id === id);
+  if(!t || demo) return;
+  editing = id;
+  const f = $("#form");
+  f.ticker.value = t.ticker; f.qty.value = t.qty;
+  f.entryDate.value = t.entryDate; f.entryPrice.value = t.entryPrice;
+  f.exitDate.value = t.exitDate || ""; f.exitPrice.value = t.exitPrice ?? "";
+  f.fees.value = t.fees || ""; f.tag.value = t.tag || ""; f.memo.value = t.memo || "";
+  (t.side === "short" ? $("#side-s") : $("#side-l")).checked = true;
+  $("#form-title").textContent = `${t.ticker} 수정`;
+  $("#submit").textContent = isOpen(t) ? "청산 기록하고 커밋" : "수정하고 커밋";
+  $("#cancel-edit").hidden = false;
+  render();
+  (isOpen(t) ? f.exitDate : f.ticker).focus();
+  $("#form").scrollIntoView({block: "nearest", behavior: "smooth"});
+}
+function cancelEdit(){
+  editing = null;
+  $("#form").reset();
+  $("#form-title").textContent = "거래 기록";
+  $("#submit").textContent = "기록하고 커밋";
+  $("#cancel-edit").hidden = true;
+  render();
+}
+$("#cancel-edit").addEventListener("click", cancelEdit);
+
 $("#form").addEventListener("submit", async e => {
   e.preventDefault();
   const f = Object.fromEntries(new FormData(e.target));
-  if(f.exitDate < f.entryDate){ note("청산일이 진입일보다 빠릅니다.", true); return; }
+  if(!!f.exitDate !== !!f.exitPrice){ note("청산일과 청산가는 같이 넣거나 같이 비워야 합니다.", true); return; }
+  if(f.exitDate && f.exitDate < f.entryDate){ note("청산일이 진입일보다 빠릅니다.", true); return; }
   const t = {
-    id: Date.now(), ticker: f.ticker.trim().toUpperCase(), side: f.side,
+    id: editing ?? Date.now(), ticker: f.ticker.trim().toUpperCase(), side: f.side,
     qty: +f.qty, entryDate: f.entryDate, entryPrice: +f.entryPrice,
-    exitDate: f.exitDate, exitPrice: +f.exitPrice, fees: +f.fees || 0,
-    tag: f.tag.trim(), memo: f.memo.trim(),
+    exitDate: f.exitDate || null, exitPrice: f.exitPrice ? +f.exitPrice : null,
+    fees: +f.fees || 0, tag: f.tag.trim(), memo: f.memo.trim(),
   };
-  trades.push(t); render();
-  if(await save(`add ${t.ticker} ${t.exitDate} ${usd(pnl(t))}`)) e.target.reset();
+  const what = isOpen(t) ? "보유 중" : usd(pnl(t));
+  if(editing){
+    trades[trades.findIndex(x => x.id === editing)] = t;
+    render();
+    if(await save(`edit ${t.ticker} ${t.entryDate} ${what}`)) cancelEdit();
+  }else{
+    trades.push(t); render();
+    if(await save(`add ${t.ticker} ${t.entryDate} ${what}`)) e.target.reset();
+  }
 });
 
 document.addEventListener("click", async e => {
   const del = e.target.closest(".del");
   if(del){
     const t = trades.find(x => x.id === +del.dataset.id);
-    if(!confirm(`${t.ticker} (${t.entryDate} → ${t.exitDate}) 기록을 삭제할까요?`)) return;
+    if(!confirm(`${t.ticker} (${t.entryDate} → ${t.exitDate || "보유 중"}) 기록을 삭제할까요?`)) return;
+    if(editing === t.id) cancelEdit();
     trades = trades.filter(x => x.id !== t.id); render();
-    await save(`remove ${t.ticker} ${t.exitDate}`);
+    await save(`remove ${t.ticker} ${t.entryDate}`);
     return;
   }
+  const tr = e.target.closest("tbody tr[data-id]");
+  if(tr){ startEdit(+tr.dataset.id); return; }
   if(e.target.id === "load-demo"){ demo = true; trades = DEMO.slice(); render();
     note('<b>예시 데이터</b> 화면만 채운 것이고 저장되지 않습니다. 새로고침하면 사라집니다.'); }
 });
@@ -519,6 +579,7 @@ const DEMO = [
  {id:12,ticker:"NFLX",side:"long",qty:6, entryDate:"2026-07-07",entryPrice:1042.00,exitDate:"2026-08-11",exitPrice:1158.50,fees:2.6,tag:"돌파",memo:"박스권 상단 돌파 후 홀딩"},
  {id:13,ticker:"UBER",side:"long",qty:70,entryDate:"2026-07-28",entryPrice:94.60, exitDate:"2026-08-04",exitPrice:89.95, fees:2.0,tag:"눌림목",memo:"지지선 이탈"},
  {id:14,ticker:"GOOGL",side:"long",qty:30,entryDate:"2026-08-18",entryPrice:198.40,exitDate:"2026-09-09",exitPrice:221.15,fees:2.2,tag:"돌파",memo:"신고가 재돌파, 목표가 도달"},
+ {id:15,ticker:"MU",  side:"long",qty:25,entryDate:"2026-08-10",entryPrice:118.75,exitDate:null,exitPrice:null,fees:0,tag:"눌림목",memo:"아직 보유 중 — 팔면 이 줄을 눌러 청산만 채우기"},
 ];
 
 /* ---------- 계산식 자체 점검: index.html#selftest ---------- */
@@ -536,6 +597,10 @@ if(location.hash === "#selftest"){
   check("mdd/streak", s.mdd === 60 && s.worst === 1);   // 곡선 100→200→140, 고점 200에서 60 하락
   check("빈 목록", stats([]).n === 0 && stats([]).total === 0);
   check("손실 0건 손익비", stats([t1]).payoff === Infinity);
+  const open = {ticker:"D",side:"long",qty:10,entryDate:"2026-08-10",entryPrice:118.75,exitDate:null,exitPrice:null,fees:0};
+  check("보유 중 판별", isOpen(open) && !isOpen(t1) && isOpen({...t1, exitPrice:null}));
+  check("보유 중은 실현손익 제외", closed([t1,open,t3]).length === 2 && stats(closed([t1,open,t3])).total === 40);
+  check("보유 중 보유일수는 오늘 기준", held(open) === Math.round((Date.now() - new Date("2026-08-10")) / 864e5));
   const bad = ok.filter(([,c]) => !c);
   document.body.insertAdjacentHTML("afterbegin",
     `<p style="margin:0;padding:10px 20px;font-weight:600;background:var(${bad.length ? "--up-soft" : "--brass-soft"});color:var(${bad.length ? "--up" : "--brass"})">`
