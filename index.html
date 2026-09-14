@@ -135,6 +135,7 @@ dialog a{color:var(--brass)}
 .steps li{margin-bottom:10px}
 .steps span{display:block; margin-top:3px}
 .steps b{color:var(--ink)}
+.steps .alt{margin-top:12px; padding-top:10px; border-top:1px solid var(--line-soft)}
 .bigbtn{display:inline-block; background:var(--ink); color:var(--surface); text-decoration:none;
   border-radius:6px; padding:7px 12px; font-size:12.5px; font-weight:600}
 details summary{font-size:12px; color:var(--muted); cursor:pointer}
@@ -238,10 +239,11 @@ kbd{font-family:"IBM Plex Mono",monospace; font-size:11px; border:1px solid var(
     <ol class="steps">
       <li><a class="bigbtn" href="https://github.com/settings/tokens/new?scopes=public_repo&amp;description=%EB%A7%A4%EB%A7%A4%EC%9D%BC%EC%A7%80%20Tape" target="_blank" rel="noopener">GitHub에서 토큰 만들기 ↗</a>
         <span>권한은 이미 체크돼 있음 — 맨 아래 <b>Generate token</b>만 누르면 됩니다.</span></li>
-      <li>만들어진 <code>ghp_…</code>를 복사해서 아래 붙여넣기</li>
+      <li>만들어진 토큰을 복사해서 아래 붙여넣기</li>
+      <li class="alt">또는 이 PC에 <b>GitHub CLI</b>가 깔려 있으면 터미널에서 <code>gh auth token | clip</code> 한 줄 → 바로 붙여넣기 (토큰 만들 필요 없음)</li>
     </ol>
     <div class="field"><label for="s-token">토큰</label>
-      <input id="s-token" type="password" placeholder="ghp_…" autocomplete="off"></div>
+      <input id="s-token" type="password" placeholder="ghp_… / gho_…" autocomplete="off"></div>
     <details><summary>저장소를 직접 지정</summary>
       <div class="field" style="margin-top:8px"><label for="s-repo">사용자명/저장소명</label>
         <input id="s-repo" placeholder="username/trading-journal" autocomplete="off"></div>
