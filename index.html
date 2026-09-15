@@ -76,7 +76,16 @@ svg{display:block; width:100%; height:auto; max-width:100%}
 .cols{display:grid; grid-template-columns:1fr 320px; gap:18px; margin-top:22px; align-items:start}
 form{padding:16px}
 .field{display:flex; flex-direction:column; gap:4px; margin-bottom:10px}
-.field label{font-size:11px; letter-spacing:.06em; text-transform:uppercase; color:var(--muted)}
+.field label{font-size:11px; letter-spacing:.06em; text-transform:uppercase; color:var(--muted);
+  display:flex; justify-content:space-between; align-items:center; gap:6px}
+.calcbtn{border:1px solid var(--line); background:var(--surface); border-radius:4px; padding:1px 6px;
+  font-size:10px; color:var(--brass); text-transform:none; letter-spacing:0; font-weight:600}
+.calcbtn:hover{background:var(--brass-soft)}
+.crow{display:grid; grid-template-columns:1fr 1fr auto; gap:8px; margin-bottom:8px; align-items:center}
+.calc-out{display:flex; justify-content:space-between; align-items:baseline; gap:10px;
+  border-top:1px solid var(--line); margin-top:12px; padding-top:10px; font-size:12.5px; color:var(--muted)}
+.calc-out b{font-family:"IBM Plex Mono",monospace; font-variant-numeric:tabular-nums;
+  font-size:20px; font-weight:600; color:var(--ink); margin-left:6px}
 .row2{display:grid; grid-template-columns:1fr 1fr; gap:10px}
 input,select,textarea{font:inherit; font-size:13px; color:var(--ink); background:var(--surface-2);
   border:1px solid var(--line); border-radius:6px; padding:7px 9px; width:100%}
@@ -207,11 +216,11 @@ kbd{font-family:"IBM Plex Mono",monospace; font-size:11px; border:1px solid var(
         <input id="qty" name="qty" type="number" step="any" min="0" required placeholder="10"></div>
       <div class="row2">
         <div class="field"><label for="entryDate">진입일</label><input id="entryDate" name="entryDate" type="date" required></div>
-        <div class="field"><label for="entryPrice">진입가 $</label><input id="entryPrice" name="entryPrice" type="number" step="any" min="0" required></div>
+        <div class="field"><label for="entryPrice">진입가 $ <button type="button" class="calcbtn" data-calc="entry">평균 계산</button></label><input id="entryPrice" name="entryPrice" type="number" step="any" min="0" required></div>
       </div>
       <div class="row2">
         <div class="field"><label for="exitDate">청산일</label><input id="exitDate" name="exitDate" type="date"></div>
-        <div class="field"><label for="exitPrice">청산가 $</label><input id="exitPrice" name="exitPrice" type="number" step="any" min="0"></div>
+        <div class="field"><label for="exitPrice">청산가 $ <button type="button" class="calcbtn" data-calc="exit">평균 계산</button></label><input id="exitPrice" name="exitPrice" type="number" step="any" min="0"></div>
       </div>
       <p class="hint">청산 칸을 비워두면 <b>보유 중</b>으로 남습니다. 나중에 왼쪽 표에서 그 줄을 눌러 채우세요.</p>
       <div class="row2">
@@ -255,11 +264,33 @@ kbd{font-family:"IBM Plex Mono",monospace; font-size:11px; border:1px solid var(
   </form>
 </dialog>
 
+<dialog id="calc">
+  <h2 id="calc-title">평균 단가 계산</h2>
+  <p>나눠서 체결된 걸 그대로 넣으세요. 수량으로 가중평균한 단가가 나옵니다.</p>
+  <div id="calc-rows"></div>
+  <button class="ghost" type="button" id="calc-add">+ 줄 추가</button>
+  <div class="calc-out">
+    <span>총 <b id="calc-qty">0</b>주</span>
+    <span>평균 <b id="calc-avg">$0</b></span>
+  </div>
+  <div class="calc-out" style="border:0; margin:0; padding-top:4px"><span>투입금</span><span id="calc-amt" class="num">$0.00</span></div>
+  <div class="dlg-actions">
+    <button class="ghost" type="button" id="calc-close">닫기</button>
+    <button class="submit" type="button" id="calc-apply" style="width:auto">폼에 넣기</button>
+  </div>
+</dialog>
+
 <script>
 const $ = s => document.querySelector(s);
 const LS_TOKEN = "tape.token", LS_REPO = "tape.repo";
 
 /* ---------- 계산 (순수 함수) ---------- */
+const avgPrice = fills => {            // [[수량, 단가], …] → 가중평균
+  const ok = fills.filter(([q,p]) => q > 0 && p > 0);
+  const qty = ok.reduce((a,[q]) => a + q, 0);
+  const amt = ok.reduce((a,[q,p]) => a + q * p, 0);
+  return {qty, amt, avg: qty ? amt / qty : 0};
+};
 const isOpen = t => !t.exitDate || t.exitPrice == null;          // 아직 안 판 것 = 보유 중
 const closed = list => list.filter(t => !isOpen(t));              // 실현 손익 계산 대상
 const pnl = t => (t.side === "short" ? -1 : 1) * (t.exitPrice - t.entryPrice) * t.qty - (t.fees || 0);
@@ -611,6 +642,50 @@ const DEMO = [
  {id:15,ticker:"MU",  side:"long",qty:25,entryDate:"2026-08-10",entryPrice:118.75,exitDate:null,exitPrice:null,fees:0,tag:"눌림목",memo:"아직 보유 중 — 팔면 이 줄을 눌러 청산만 채우기"},
 ];
 
+/* ---------- 평균 단가 계산기 ---------- */
+let calcTarget = "entry";
+const calcRow = () => `<div class="crow">
+  <input type="number" step="any" min="0" class="c-qty" placeholder="수량" aria-label="수량">
+  <input type="number" step="any" min="0" class="c-price" placeholder="단가 $" aria-label="단가">
+  <button type="button" class="del c-del" aria-label="줄 삭제">×</button></div>`;
+const calcFills = () => [...document.querySelectorAll("#calc-rows .crow")]
+  .map(r => [+r.querySelector(".c-qty").value || 0, +r.querySelector(".c-price").value || 0]);
+
+function calcRender(){
+  const r = avgPrice(calcFills());
+  $("#calc-qty").textContent = r.qty ? +r.qty.toFixed(4) : 0;
+  $("#calc-avg").textContent = r.avg ? "$" + r.avg.toFixed(4).replace(/0+$/,"").replace(/.$/,"") : "$0";
+  $("#calc-amt").textContent = usd(r.amt);
+}
+function calcOpen(target){
+  calcTarget = target;
+  $("#calc-title").textContent = target === "entry" ? "평균 진입가 계산" : "평균 청산가 계산";
+  $("#calc-rows").innerHTML = calcRow() + calcRow() + calcRow();
+  calcRender();
+  $("#calc").showModal();
+  $("#calc-rows .c-qty").focus();
+}
+document.addEventListener("click", e => {
+  const b = e.target.closest(".calcbtn");
+  if(b){ e.preventDefault(); calcOpen(b.dataset.calc); }
+  if(e.target.closest(".c-del")){ e.target.closest(".crow").remove(); calcRender(); }
+});
+$("#calc-add").addEventListener("click", () => { $("#calc-rows").insertAdjacentHTML("beforeend", calcRow()); calcRender(); });
+$("#calc-rows").addEventListener("input", e => {
+  calcRender();
+  const last = $("#calc-rows .crow:last-child");            // 마지막 줄을 채우면 새 줄이 생김
+  if(last.contains(e.target) && calcFills().at(-1).every(v => v > 0))
+    $("#calc-rows").insertAdjacentHTML("beforeend", calcRow());
+});
+$("#calc-close").addEventListener("click", () => $("#calc").close());
+$("#calc-apply").addEventListener("click", () => {
+  const r = avgPrice(calcFills());
+  if(!r.qty){ $("#calc").close(); return; }
+  $(calcTarget === "entry" ? "#entryPrice" : "#exitPrice").value = +r.avg.toFixed(4);
+  if(calcTarget === "entry") $("#qty").value = +r.qty.toFixed(4);
+  $("#calc").close();
+});
+
 /* ---------- 계산식 자체 점검: index.html#selftest ---------- */
 if(location.hash === "#selftest"){
   const t1 = {ticker:"A",side:"long", qty:10,entryDate:"2026-01-01",entryPrice:100,exitDate:"2026-01-11",exitPrice:110,fees:0};
@@ -626,6 +701,9 @@ if(location.hash === "#selftest"){
   check("mdd/streak", s.mdd === 60 && s.worst === 1);   // 곡선 100→200→140, 고점 200에서 60 하락
   check("빈 목록", stats([]).n === 0 && stats([]).total === 0);
   check("손실 0건 손익비", stats([t1]).payoff === Infinity);
+  check("가중평균 단가", avgPrice([[10,100],[30,200]]).avg === 175 && avgPrice([[10,100],[30,200]]).qty === 40);
+  check("빈 줄 무시", avgPrice([[10,100],[0,0],[0,50],[10,0]]).avg === 100);
+  check("전부 비면 0", avgPrice([[0,0]]).avg === 0 && avgPrice([]).qty === 0);
   const open = {ticker:"D",side:"long",qty:10,entryDate:"2026-08-10",entryPrice:118.75,exitDate:null,exitPrice:null,fees:0};
   check("보유 중 판별", isOpen(open) && !isOpen(t1) && isOpen({...t1, exitPrice:null}));
   check("보유 중은 실현손익 제외", closed([t1,open,t3]).length === 2 && stats(closed([t1,open,t3])).total === 40);
