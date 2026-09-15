@@ -1,1 +1,15 @@
-[]
+[
+ {
+  "id": 1789433865081,
+  "ticker": "PLTR",
+  "side": "long",
+  "qty": 41,
+  "entryDate": "2026-08-10",
+  "entryPrice": 172.96,
+  "exitDate": null,
+  "exitPrice": null,
+  "fees": 0,
+  "tag": "congestion",
+  "memo": "congestion 전략에 따라 매수"
+ }
+]
