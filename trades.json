@@ -11,5 +11,18 @@
   "fees": 0,
   "tag": "congestion",
   "memo": "congestion 전략에 따라 매수"
+ },
+ {
+  "id": 1789433927326,
+  "ticker": "OKTA",
+  "side": "long",
+  "qty": 53,
+  "entryDate": "2026-08-27",
+  "entryPrice": 171.6974,
+  "exitDate": null,
+  "exitPrice": null,
+  "fees": 0,
+  "tag": "",
+  "memo": ""
  }
 ]
