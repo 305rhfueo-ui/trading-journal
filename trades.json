@@ -22,7 +22,7 @@
   "exitDate": null,
   "exitPrice": null,
   "fees": 0,
-  "tag": "",
-  "memo": ""
+  "tag": "breakout",
+  "memo": "breakout 전략에 따라 매수\n다만 시장상황을 안본게 실수"
  }
 ]
