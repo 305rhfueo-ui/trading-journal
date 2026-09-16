@@ -1,4 +1,10 @@
 <title>매매일지 Tape</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="theme-color" content="#11161f">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="매매일지">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans+KR:wght@400;500;600;700&display=swap">
 <style>
@@ -616,6 +622,9 @@ if(location.hash.startsWith("#token=")){
   localStorage.setItem(LS_TOKEN, decodeURIComponent(location.hash.slice(7)));
   history.replaceState(null, "", location.pathname + location.search);
 }
+
+if("serviceWorker" in navigator && location.protocol === "https:")   // 앱으로 설치 가능하게
+  navigator.serviceWorker.register("sw.js").catch(() => {});
 
 load();
 });
