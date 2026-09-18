@@ -134,6 +134,7 @@ tbody tr.editing td:first-child{box-shadow:inset 3px 0 0 var(--brass)}
 .pill.w{background:var(--up-soft); color:var(--up)}
 .pill.l{background:var(--down-soft); color:var(--down)}
 .tag{font-size:11.5px; color:var(--muted); border:1px solid var(--line); border-radius:4px; padding:1px 6px}
+.plan small{font-size:10.5px; color:var(--muted); margin-left:3px}
 .memo{max-width:200px; overflow:hidden; text-overflow:ellipsis; color:var(--muted); font-size:12px}
 .del{background:none; border:0; color:var(--muted); font-size:15px; line-height:1; padding:2px 6px; border-radius:4px}
 .del:hover{background:var(--up-soft); color:var(--up)}
@@ -225,6 +226,10 @@ kbd{font-family:"IBM Plex Mono",monospace; font-size:11px; border:1px solid var(
         <div class="field"><label for="entryPrice">진입가 $ <button type="button" class="calcbtn" data-calc="entry">평균 계산</button></label><input id="entryPrice" name="entryPrice" type="number" step="any" min="0" required></div>
       </div>
       <div class="row2">
+        <div class="field"><label for="target">목표가 $</label><input id="target" name="target" type="number" step="any" min="0" placeholder="선택"></div>
+        <div class="field"><label for="stop">손절가 $</label><input id="stop" name="stop" type="number" step="any" min="0" placeholder="선택"></div>
+      </div>
+      <div class="row2">
         <div class="field"><label for="exitDate">청산일</label><input id="exitDate" name="exitDate" type="date"></div>
         <div class="field"><label for="exitPrice">청산가 $ <button type="button" class="calcbtn" data-calc="exit">평균 계산</button></label><input id="exitPrice" name="exitPrice" type="number" step="any" min="0"></div>
       </div>
@@ -296,6 +301,13 @@ const avgPrice = fills => {            // [[수량, 단가], …] → 가중평�
   const qty = ok.reduce((a,[q]) => a + q, 0);
   const amt = ok.reduce((a,[q,p]) => a + q * p, 0);
   return {qty, amt, avg: qty ? amt / qty : 0};
+};
+const dist = (t, price) => (price - t.entryPrice) / t.entryPrice * 100;   // 진입가 대비 %
+const planRR = t => {                    // 계획 손익비 = 목표까지 이익 ÷ 손절까지 손실
+  if(t.target == null || t.stop == null) return null;
+  const dir = t.side === "short" ? -1 : 1;
+  const gain = dir * (t.target - t.entryPrice), risk = dir * (t.entryPrice - t.stop);
+  return gain > 0 && risk > 0 ? gain / risk : null;
 };
 const isOpen = t => !t.exitDate || t.exitPrice == null;          // 아직 안 판 것 = 보유 중
 const closed = list => list.filter(t => !isOpen(t));              // 실현 손익 계산 대상
@@ -468,6 +480,12 @@ function renderChart(s){
   </svg>`;
 }
 
+function planCell(t){
+  if(t.target == null && t.stop == null) return "–";
+  const one = (v, c) => v == null ? "–" : `<span class="${c}">${v.toFixed(2)}</span><small>${sgn(dist(t, v))}%</small>`;
+  const rr = planRR(t);
+  return one(t.target, "up") + " / " + one(t.stop, "down") + (rr ? ` <span class="tag">1:${rr.toFixed(1)}</span>` : "");
+}
 function renderTable(list, s){
   const openCount = list.filter(isOpen).length;
   if(!list.length){
@@ -490,6 +508,7 @@ function renderTable(list, s){
       <td class="num">${held(t)}일</td>
       <td class="num">${t.entryPrice.toFixed(2)}</td>
       <td class="num">${op ? "–" : t.exitPrice.toFixed(2)}</td>
+      <td class="num plan">${planCell(t)}</td>
       <td class="num ${op ? "" : cls(p)}">${op ? "–" : usd(p)}</td>
       <td>${op ? '<span class="pill" style="background:var(--brass-soft);color:var(--brass)">미청산</span>'
                 : `<span class="pill ${p > 0 ? "w" : "l"} num">${sgn(c)}%</span>`}</td>
@@ -500,12 +519,12 @@ function renderTable(list, s){
   }).join("");
   $("#table").innerHTML = `
     <thead><tr>
-      <th class="l">종목</th><th>수량</th><th>기간</th><th>보유</th><th>진입</th><th>청산</th>
+      <th class="l">종목</th><th>수량</th><th>기간</th><th>보유</th><th>진입</th><th>청산</th><th>목표 / 손절</th>
       <th>손익</th><th class="l">수익률</th><th class="l">전략</th><th class="l">메모</th><th></th>
     </tr></thead>
     <tbody>${rows}</tbody>
-    <tfoot><tr><td class="l">청산 ${list.length - openCount}건${openCount ? ` · 보유 중 ${openCount}건` : ""}</td><td colspan="5"></td>
-      <td class="num ${cls(s.total)}">${usd(s.total)}</td><td colspan="3"></td></tr></tfoot>`;
+    <tfoot><tr><td class="l">청산 ${list.length - openCount}건${openCount ? ` · 보유 중 ${openCount}건` : ""}</td><td colspan="6"></td>
+      <td class="num ${cls(s.total)}">${usd(s.total)}</td><td colspan="4"></td></tr></tfoot>`;
 }
 
 function filtered(){
@@ -541,6 +560,7 @@ function startEdit(id){
   const f = $("#form");
   f.ticker.value = t.ticker; f.qty.value = t.qty;
   f.entryDate.value = t.entryDate; f.entryPrice.value = t.entryPrice;
+  f.target.value = t.target ?? ""; f.stop.value = t.stop ?? "";
   f.exitDate.value = t.exitDate || ""; f.exitPrice.value = t.exitPrice ?? "";
   f.fees.value = t.fees || ""; f.tag.value = t.tag || ""; f.memo.value = t.memo || "";
   (t.side === "short" ? $("#side-s") : $("#side-l")).checked = true;
@@ -571,11 +591,15 @@ $("#form").addEventListener("submit", async e => {
   if(demo){ trades = []; demo = false; note(""); }   // 예시 데이터는 버리고 진짜 기록만 저장
   const f = Object.fromEntries(new FormData(e.target));
   if(!!f.exitDate !== !!f.exitPrice){ note("청산일과 청산가는 같이 넣거나 같이 비워야 합니다.", true); return; }
+  const sh = f.side === "short", ep = +f.entryPrice;
+  if(f.target && (sh ? +f.target >= ep : +f.target <= ep)){ note(sh ? "숏은 목표가가 진입가보다 낮아야 합니다." : "목표가가 진입가보다 높아야 합니다.", true); return; }
+  if(f.stop && (sh ? +f.stop <= ep : +f.stop >= ep)){ note(sh ? "숏은 손절가가 진입가보다 높아야 합니다." : "손절가가 진입가보다 낮아야 합니다.", true); return; }
   if(f.exitDate && f.exitDate < f.entryDate){ note("청산일이 진입일보다 빠릅니다.", true); return; }
   const t = {
     id: editing ?? Date.now(), ticker: f.ticker.trim().toUpperCase(), side: f.side,
     qty: +f.qty, entryDate: f.entryDate, entryPrice: +f.entryPrice,
     exitDate: f.exitDate || null, exitPrice: f.exitPrice ? +f.exitPrice : null,
+    target: f.target ? +f.target : null, stop: f.stop ? +f.stop : null,
     fees: +f.fees || 0, tag: f.tag.trim(), memo: f.memo.trim(),
   };
   const what = isOpen(t) ? "보유 중" : usd(pnl(t));
@@ -713,6 +737,10 @@ if(location.hash === "#selftest"){
   check("가중평균 단가", avgPrice([[10,100],[30,200]]).avg === 175 && avgPrice([[10,100],[30,200]]).qty === 40);
   check("빈 줄 무시", avgPrice([[10,100],[0,0],[0,50],[10,0]]).avg === 100);
   check("전부 비면 0", avgPrice([[0,0]]).avg === 0 && avgPrice([]).qty === 0);
+  check("계획 손익비 롱", planRR({side:"long", entryPrice:100, target:120, stop:90}) === 2);
+  check("계획 손익비 숏", planRR({side:"short", entryPrice:100, target:85, stop:105}) === 3);
+  check("목표·손절 없거나 방향 틀리면 null", planRR({side:"long", entryPrice:100, target:120, stop:null}) === null
+    && planRR({side:"long", entryPrice:100, target:90, stop:80}) === null);
   const open = {ticker:"D",side:"long",qty:10,entryDate:"2026-08-10",entryPrice:118.75,exitDate:null,exitPrice:null,fees:0};
   check("보유 중 판별", isOpen(open) && !isOpen(t1) && isOpen({...t1, exitPrice:null}));
   check("보유 중은 실현손익 제외", closed([t1,open,t3]).length === 2 && stats(closed([t1,open,t3])).total === 40);
