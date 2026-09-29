@@ -135,6 +135,7 @@ tbody tr.editing td:first-child{box-shadow:inset 3px 0 0 var(--brass)}
 .pill.l{background:var(--down-soft); color:var(--down)}
 .tag{font-size:11.5px; color:var(--muted); border:1px solid var(--line); border-radius:4px; padding:1px 6px}
 .plan small{font-size:10.5px; color:var(--muted); margin-left:3px}
+.qqqdelta{font-size:10.5px; color:var(--muted); margin-left:5px; display:block}
 .memo{max-width:200px; overflow:hidden; text-overflow:ellipsis; color:var(--muted); font-size:12px}
 .del{background:none; border:0; color:var(--muted); font-size:15px; line-height:1; padding:2px 6px; border-radius:4px}
 .del:hover{background:var(--up-soft); color:var(--up)}
@@ -180,6 +181,7 @@ kbd{font-family:"IBM Plex Mono",monospace; font-size:11px; border:1px solid var(
 
 <div class="tiles" id="tiles"></div>
 <div class="minor" id="minor"></div>
+<div class="minor" id="minor-open"></div>
 
 <div class="panel">
   <div class="panel-hd">
@@ -310,6 +312,26 @@ const planRR = t => {                    // 계획 손익비 = 목표까지 이�
   return gain > 0 && risk > 0 ? gain / risk : null;
 };
 const isOpen = t => !t.exitDate || t.exitPrice == null;          // 아직 안 판 것 = 보유 중
+// QQQ 종가 시리즈(날짜 오름차순)에서 주어진 날짜 이하 중 가장 최근 종가 — 없으면 null
+const qqqOnOrBefore = (series, dateStr) => {
+  let ans = null;
+  for (const p of series || []) { if (p.d <= dateStr) ans = p; else break; }
+  return ans;
+};
+// 보유 중인 거래의 평가손익 + 같은 기간 QQQ 수익률(같은 금액을 QQQ에 넣었다면) — 가격이 없으면 null
+function unrealized(t, prices){
+  const cur = prices && prices.last && prices.last[t.ticker];
+  if(!cur) return null;
+  const dir = t.side === "short" ? -1 : 1;
+  const cost = t.entryPrice * t.qty;
+  const pnlU = dir * (cur.c - t.entryPrice) * t.qty;
+  const pctU = dir * (cur.c - t.entryPrice) / t.entryPrice * 100;
+  const qEntry = qqqOnOrBefore(prices.qqq, t.entryDate);
+  const qNow = prices.qqq && prices.qqq.length ? prices.qqq[prices.qqq.length - 1] : null;
+  const qqqPct = qEntry && qNow ? (qNow.c - qEntry.c) / qEntry.c * 100 : null;   // 방향 무관 — "그냥 QQQ 샀으면" 기준
+  const qqqPnl = qqqPct == null ? null : cost * qqqPct / 100;
+  return {cur: cur.c, curDate: cur.d, pnlU, pctU, qqqPct, qqqPnl, cost, asOf: qNow && qNow.d};
+}
 const closed = list => list.filter(t => !isOpen(t));              // 실현 손익 계산 대상
 const pnl = t => (t.side === "short" ? -1 : 1) * (t.exitPrice - t.entryPrice) * t.qty - (t.fees || 0);
 const pct = t => pnl(t) / (t.entryPrice * t.qty) * 100;
@@ -347,7 +369,7 @@ function stats(list){
 }
 
 /* ---------- 상태 ---------- */
-let trades = [], sha = null, demo = false, editing = null;
+let trades = [], sha = null, demo = false, editing = null, prices = null;
 const repo = () => localStorage.getItem(LS_REPO) ||
   (location.hostname.endsWith("github.io")
     ? location.hostname.split(".")[0] + "/" + (location.pathname.split("/")[1] || "")
@@ -374,8 +396,18 @@ const headers = () => {
   return h;
 };
 
+// prices.json — GitHub Actions가 만든 정적 파일(같은 저장소). 토큰 없이 읽는다. 실패해도 조용히 넘어간다.
+async function fetchPrices(){
+  try{
+    const r = await fetch("prices.json?t=" + Date.now(), {cache: "no-store"});
+    prices = r.ok ? await r.json() : null;
+  }catch(e){ prices = null; }
+}
+
 async function load(){
+  const pricesLoaded = fetchPrices();   // trades 와 별개 — 토큰·저장소 설정과 무관하게 항상 시도
   if(!repo()){
+    await pricesLoaded;
     setStatus("idle", "저장소 미설정");
     note('<b>시작하기</b> 오른쪽 위 <b>설정</b>에서 저장소(<code>username/trading-journal</code>)를 넣으면 기록이 시작됩니다.');
     render(); return;
@@ -393,6 +425,7 @@ async function load(){
     setStatus("error", "불러오기 실패");
     note("불러오지 못했습니다 — " + esc(e.message), true);
   }
+  await pricesLoaded;
   render();
 }
 
@@ -449,6 +482,31 @@ function renderStats(s, openCount = 0){
     `<span>최고 수익 <b class="num up">${sgn(s.best)}% · ${esc(s.bestTicker)}</b></span>` + openNote;
 }
 
+// 보유 중 전체를 합한 평가손익 vs "같은 돈을 QQQ에 넣었으면" — 각 포지션의 진입일부터 전영업일까지
+function renderUnrealized(list){
+  const open = list.filter(isOpen);
+  const el = $("#minor-open");
+  if(!open.length){ el.innerHTML = ""; return; }
+  const us = open.map(t => unrealized(t, prices)).filter(Boolean);
+  if(!us.length){
+    el.innerHTML = prices == null
+      ? `<span>평가손익 — 가격 정보를 아직 못 받았습니다 (매일 자동 갱신)</span>`
+      : `<span>평가손익 — 보유 종목의 가격을 아직 못 받았습니다</span>`;
+    return;
+  }
+  const pnlU = us.reduce((a,u) => a+u.pnlU, 0), cost = us.reduce((a,u) => a+u.cost, 0);
+  const qqqPnl = us.reduce((a,u) => a + (u.qqqPnl || 0), 0);
+  const pctU = cost ? pnlU / cost * 100 : 0, qqqPct = cost ? qqqPnl / cost * 100 : 0;
+  const asOf = us[0].asOf;
+  const missing = open.length - us.length;
+  el.innerHTML =
+    `<span>평가손익(${us.length}종목) <b class="num ${cls(pnlU)}">${sgn(pctU)}% · ${usd(pnlU)}</b></span>` +
+    `<span>같은 돈 QQQ였다면 <b class="num ${cls(qqqPnl)}">${sgn(qqqPct)}% · ${usd(qqqPnl)}</b></span>` +
+    `<span>초과(알파) <b class="num ${cls(pnlU - qqqPnl)}">${sgn(pctU - qqqPct)}%p</b></span>` +
+    `<span>전영업일 종가 기준 <b>${esc(asOf || "–")}</b></span>` +
+    (missing ? `<span>가격 없음 ${missing}종목</span>` : "");
+}
+
 function renderChart(s){
   const W = 880, H = 240, L = 58, R = 16, T = 16, B = 26;
   if(!s.n){ $("#chart").innerHTML = `<p class="empty">거래를 기록하면 누적 손익 곡선이 그려집니다.</p>`; return; }
@@ -501,17 +559,21 @@ function renderTable(list, s){
     : (a.exitDate < b.exitDate ? 1 : -1));
   const rows = order.map(t => {
     const op = isOpen(t), p = op ? 0 : pnl(t), c = op ? 0 : pct(t);
+    const u = op ? unrealized(t, prices) : null;
     return `<tr data-id="${t.id}" class="${editing === t.id ? "editing" : ""}" title="클릭하면 수정">
       <td class="l"><span class="tick">${esc(t.ticker)}</span> <span class="side ${t.side === "short" ? "s" : ""}">${t.side === "short" ? "숏" : "롱"}</span></td>
       <td class="num">${t.qty}</td>
       <td class="num">${t.entryDate.slice(2)} → ${op ? "보유 중" : t.exitDate.slice(5)}</td>
       <td class="num">${held(t)}일</td>
       <td class="num">${t.entryPrice.toFixed(2)}</td>
-      <td class="num">${op ? "–" : t.exitPrice.toFixed(2)}</td>
+      <td class="num" title="${u ? `현재가 · ${esc(u.curDate)} 종가` : ""}">${op ? (u ? u.cur.toFixed(2) : "–") : t.exitPrice.toFixed(2)}</td>
       <td class="num plan">${planCell(t)}</td>
-      <td class="num ${op ? "" : cls(p)}">${op ? "–" : usd(p)}</td>
-      <td>${op ? '<span class="pill" style="background:var(--brass-soft);color:var(--brass)">미청산</span>'
-                : `<span class="pill ${p > 0 ? "w" : "l"} num">${sgn(c)}%</span>`}</td>
+      <td class="num ${op ? (u ? cls(u.pnlU) : "") : cls(p)}">${op ? (u ? usd(u.pnlU) : "–") : usd(p)}</td>
+      <td>${op
+          ? (u
+            ? `<span class="pill ${u.pctU > 0 ? "w" : "l"} num">${sgn(u.pctU)}%</span><small class="qqqdelta">QQQ ${sgn(u.qqqPct)}%</small>`
+            : '<span class="pill" style="background:var(--brass-soft);color:var(--brass)">미청산</span>')
+          : `<span class="pill ${p > 0 ? "w" : "l"} num">${sgn(c)}%</span>`}</td>
       <td class="l"><span class="tag">${esc(t.tag) || "–"}</span></td>
       <td class="l memo" title="${esc(t.memo)}">${esc(t.memo)}</td>
       <td><button class="del" data-id="${t.id}" title="삭제" aria-label="${esc(t.ticker)} 거래 삭제">×</button></td>
@@ -548,7 +610,7 @@ function render(){
     tags.map(t => `<option${t === cur ? " selected" : ""}>${esc(t)}</option>`).join("");
   $("#tags").innerHTML = tags.map(t => `<option value="${esc(t)}">`).join("");
   const list = filtered(), s = stats(closed(list));
-  renderStats(s, list.filter(isOpen).length); renderChart(s); renderTable(list, s);
+  renderStats(s, list.filter(isOpen).length); renderChart(s); renderTable(list, s); renderUnrealized(list);
   $("#need-setup").hidden = !!(token() && repo());
 }
 
@@ -745,6 +807,17 @@ if(location.hash === "#selftest"){
   check("보유 중 판별", isOpen(open) && !isOpen(t1) && isOpen({...t1, exitPrice:null}));
   check("보유 중은 실현손익 제외", closed([t1,open,t3]).length === 2 && stats(closed([t1,open,t3])).total === 40);
   check("보유 중 보유일수는 오늘 기준", held(open) === Math.round((Date.now() - new Date("2026-08-10")) / 864e5));
+  const qs = [{d:"2026-08-01",c:100},{d:"2026-08-10",c:110},{d:"2026-09-26",c:121}];
+  check("QQQ 이하 최근값", qqqOnOrBefore(qs, "2026-08-15").d === "2026-08-10" && qqqOnOrBefore(qs, "2026-07-01") === null);
+  const priced = {qqq: qs, last: {D: {d:"2026-09-26", c:130.625}}};
+  const u = unrealized(open, priced); // open: D, long, qty10, entry 118.75 (2026-08-10)
+  check("평가손익", Math.abs(u.pnlU - (130.625-118.75)*10) < 1e-9 && Math.abs(u.pctU - (130.625-118.75)/118.75*100) < 1e-9);
+  check("QQQ 비교(같은 기간·같은 금액)", Math.abs(u.qqqPct - (121-110)/110*100) < 1e-9
+    && Math.abs(u.qqqPnl - (118.75*10)*((121-110)/110)) < 1e-9);
+  check("가격 없으면 null", unrealized(open, {qqq: qs, last: {}}) === null && unrealized(open, null) === null);
+  const shortT = {ticker:"D", side:"short", qty:10, entryDate:"2026-08-10", entryPrice:118.75};
+  check("숏도 방향 반영, QQQ는 그대로 롱 기준", unrealized(shortT, priced).pnlU < 0
+    && unrealized(shortT, priced).qqqPct === u.qqqPct);
   const bad = ok.filter(([,c]) => !c);
   document.body.insertAdjacentHTML("afterbegin",
     `<p style="margin:0;padding:10px 20px;font-weight:600;background:var(${bad.length ? "--up-soft" : "--brass-soft"});color:var(${bad.length ? "--up" : "--brass"})">`
