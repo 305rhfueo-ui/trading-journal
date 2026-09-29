@@ -28,4 +28,5 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git diff --quiet -- prices.json || (git add prices.json && git commit -m "가격 갱신 $(date -u +%F)" && git push)
+          git add prices.json
+          git diff --cached --quiet -- prices.json || (git commit -m "가격 갱신 $(date -u +%F)" && git push)
