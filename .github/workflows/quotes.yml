@@ -10,6 +10,8 @@ on:
 
 permissions:
   contents: write
+  pages: write
+  id-token: write
 
 concurrency:
   group: quotes
@@ -18,15 +20,46 @@ concurrency:
 jobs:
   fetch:
     runs-on: ubuntu-latest
+    outputs:
+      changed: ${{ steps.commit.outputs.changed }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 20
       - run: node scripts/fetch-quotes.js
-      - name: 바뀐 경우만 커밋
+      - id: commit
+        name: 바뀐 경우만 커밋
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add prices.json
-          git diff --cached --quiet -- prices.json || (git commit -m "가격 갱신 $(date -u +%F)" && git push)
+          if git diff --cached --quiet -- prices.json; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            git commit -m "가격 갱신 $(date -u +%F)"
+            git push
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+      # ⚠️ 이 커밋은 기본 GITHUB_TOKEN 으로 push 하므로 deploy-pages.yml 의 push 트리거를 다시 부르지 않는다
+      # (GitHub Actions 의 재귀 방지 규칙). 그래서 바뀐 경우 Pages 배포를 여기서 직접 한다.
+  deploy:
+    needs: fetch
+    if: needs.fetch.outputs.changed == 'true'
+    runs-on: ubuntu-latest
+    concurrency:
+      group: pages
+      cancel-in-progress: false
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: "."
+      - id: deployment
+        uses: actions/deploy-pages@v4
