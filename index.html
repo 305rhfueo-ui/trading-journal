@@ -482,7 +482,7 @@ function renderStats(s, openCount = 0){
     `<span>최고 수익 <b class="num up">${sgn(s.best)}% · ${esc(s.bestTicker)}</b></span>` + openNote;
 }
 
-// 보유 중 전체를 합한 평가손익 vs "같은 돈을 QQQ에 넣었으면" — 각 포지션의 진입일부터 전영업일까지
+// 보유 중 전체를 합한 평가손익 vs "같은 돈을 QQQ에 넣었으면" — 각 포지션의 진입일부터 최근 영업일까지
 function renderUnrealized(list){
   const open = list.filter(isOpen);
   const el = $("#minor-open");
@@ -508,7 +508,7 @@ function renderUnrealized(list){
     tile("QQQ 대비 (같은 기간)", sgn(alpha) + "%p", `QQQ ${sgn(qqqPct)}% 였다면 · 초과 ${usd(pnlU - qqqPnl)}`, cls(alpha)));
 
   el.innerHTML =
-    `<span>평가손익 전영업일 종가(<b>${esc(asOf || "–")}</b>) 기준</span>` +
+    `<span>평가손익 최근 영업일 종가(<b>${esc(asOf || "–")}</b>) 기준</span>` +
     (missing ? `<span>가격 없음 ${missing}종목</span>` : "");
 }
 
@@ -571,7 +571,9 @@ function renderTable(list, s){
       <td class="num">${t.entryDate.slice(2)} → ${op ? "보유 중" : t.exitDate.slice(5)}</td>
       <td class="num">${held(t)}일</td>
       <td class="num">${t.entryPrice.toFixed(2)}</td>
-      <td class="num" title="${u ? `현재가 · ${esc(u.curDate)} 종가` : ""}">${op ? (u ? u.cur.toFixed(2) : "–") : t.exitPrice.toFixed(2)}</td>
+      <td class="num" title="${u ? `현재가 · 최근 영업일(${esc(u.curDate)}) 종가` : ""}">${op
+          ? (u ? `<small class="qqqdelta" style="display:inline">현재</small> ${u.cur.toFixed(2)}` : "–")
+          : t.exitPrice.toFixed(2)}</td>
       <td class="num plan">${planCell(t)}</td>
       <td class="num ${op ? (u ? cls(u.pnlU) : "") : cls(p)}">${op ? (u ? usd(u.pnlU) : "–") : usd(p)}</td>
       <td>${op
@@ -586,7 +588,7 @@ function renderTable(list, s){
   }).join("");
   $("#table").innerHTML = `
     <thead><tr>
-      <th class="l">종목</th><th>수량</th><th>기간</th><th>보유</th><th>진입</th><th>청산</th><th>목표 / 손절</th>
+      <th class="l">종목</th><th>수량</th><th>기간</th><th>보유</th><th>진입</th><th>청산 · 현재</th><th>목표 / 손절</th>
       <th>손익</th><th class="l">수익률</th><th class="l">전략</th><th class="l">메모</th><th></th>
     </tr></thead>
     <tbody>${rows}</tbody>
