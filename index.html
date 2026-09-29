@@ -497,13 +497,18 @@ function renderUnrealized(list){
   const pnlU = us.reduce((a,u) => a+u.pnlU, 0), cost = us.reduce((a,u) => a+u.cost, 0);
   const qqqPnl = us.reduce((a,u) => a + (u.qqqPnl || 0), 0);
   const pctU = cost ? pnlU / cost * 100 : 0, qqqPct = cost ? qqqPnl / cost * 100 : 0;
+  const alpha = pctU - qqqPct;
   const asOf = us[0].asOf;
   const missing = open.length - us.length;
+
+  // 실현 손익 4개 타일 옆에 이어붙인다 — renderStats()가 먼저 #tiles 를 채운 뒤 호출되어야 한다
+  const tile = (k,v,h,c="") => `<div class="tile"><div class="k">${k}</div><div class="v num ${c}">${v}</div><div class="h">${h}</div></div>`;
+  $("#tiles").insertAdjacentHTML("beforeend",
+    tile("전체 평가수익률", sgn(pctU) + "%", `보유 ${us.length}종목 · ${usd(pnlU)}`, cls(pnlU)) +
+    tile("QQQ 대비 (같은 기간)", sgn(alpha) + "%p", `QQQ ${sgn(qqqPct)}% 였다면 · 초과 ${usd(pnlU - qqqPnl)}`, cls(alpha)));
+
   el.innerHTML =
-    `<span>평가손익(${us.length}종목) <b class="num ${cls(pnlU)}">${sgn(pctU)}% · ${usd(pnlU)}</b></span>` +
-    `<span>같은 돈 QQQ였다면 <b class="num ${cls(qqqPnl)}">${sgn(qqqPct)}% · ${usd(qqqPnl)}</b></span>` +
-    `<span>초과(알파) <b class="num ${cls(pnlU - qqqPnl)}">${sgn(pctU - qqqPct)}%p</b></span>` +
-    `<span>전영업일 종가 기준 <b>${esc(asOf || "–")}</b></span>` +
+    `<span>평가손익 전영업일 종가(<b>${esc(asOf || "–")}</b>) 기준</span>` +
     (missing ? `<span>가격 없음 ${missing}종목</span>` : "");
 }
 
