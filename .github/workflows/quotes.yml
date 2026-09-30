@@ -6,6 +6,7 @@ on:
     paths: ["trades.json"]
   schedule:
     - cron: "50 21 * * *" # 21:50 UTC = 06:50 KST, 미국 장 마감 정산 후 (RS_Investment 와 같은 시각)
+    - cron: "0 3 * * *" # 03:00 UTC = 12:00 KST 예비 — GitHub 예약 실행은 몇 시간씩 늦거나 건너뛸 수 있다 (2026-09-30 첫 실행이 3시간 늦음)
   workflow_dispatch:
 
 permissions:
