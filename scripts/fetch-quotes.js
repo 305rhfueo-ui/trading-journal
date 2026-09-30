@@ -29,6 +29,16 @@ async function fetchDaily(ticker, range) {
       const d = new Date(ts[i] * 1000).toLocaleDateString('en-CA', { timeZone: 'America/New_York' }); // YYYY-MM-DD
       out.push({ d, c: Math.round(c * 10000) / 10000 });
     }
+    // 야후는 마감 후 몇 시간 동안 그날 봉의 close 를 null 로 준다(2026-09-30 실측: OKTA 9/29 누락).
+    // 장이 끝난 뒤(16:00 ET 이후)면 meta.regularMarketPrice 가 그날 종가다 → 그 값으로 채운다.
+    const m = r.meta || {};
+    if (isFinite(m.regularMarketPrice) && m.regularMarketTime) {
+      const et = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', hour12: false })
+        .formatToParts(new Date(m.regularMarketTime * 1000)).reduce((a, x) => (a[x.type] = x.value, a), {});
+      const d = `${et.year}-${et.month}-${et.day}`, hour = Number(et.hour) % 24;
+      const last = out[out.length - 1];
+      if (hour >= 16 && (!last || last.d < d)) out.push({ d, c: Math.round(m.regularMarketPrice * 10000) / 10000 });
+    }
     return out;
   } finally {
     clearTimeout(timer);
