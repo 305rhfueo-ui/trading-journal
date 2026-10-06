@@ -24,5 +24,20 @@
   "fees": 0,
   "tag": "breakout",
   "memo": "breakout 전략에 따라 매수\n다만 시장상황을 안본게 실수"
+ },
+ {
+  "id": 1791294452347,
+  "ticker": "OKTA",
+  "side": "long",
+  "qty": 21,
+  "entryDate": "2026-10-02",
+  "entryPrice": 200.92,
+  "exitDate": null,
+  "exitPrice": null,
+  "target": null,
+  "stop": 188,
+  "fees": 0,
+  "tag": "breakout",
+  "memo": "Breakout 전략에 따라 매수"
  }
 ]
