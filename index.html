@@ -95,7 +95,7 @@ form{padding:16px}
 .row2{display:grid; grid-template-columns:1fr 1fr; gap:10px}
 input,select,textarea{font:inherit; font-size:13px; color:var(--ink); background:var(--surface-2);
   border:1px solid var(--line); border-radius:6px; padding:7px 9px; width:100%}
-input[type=number],input[type=date]{font-family:"IBM Plex Mono",monospace; font-variant-numeric:tabular-nums}
+input.numin,input[type=date]{font-family:"IBM Plex Mono",monospace; font-variant-numeric:tabular-nums}
 textarea{resize:vertical; min-height:52px}
 input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-visible{
   outline:2px solid var(--brass); outline-offset:1px}
@@ -222,22 +222,22 @@ kbd{font-family:"IBM Plex Mono",monospace; font-size:11px; border:1px solid var(
           </div></div>
       </div>
       <div class="field"><label for="qty">수량</label>
-        <input id="qty" name="qty" type="number" step="any" min="0" required placeholder="10"></div>
+        <input id="qty" name="qty" type="text" inputmode="decimal" autocomplete="off" class="numin" required placeholder="10"></div>
       <div class="row2">
         <div class="field"><label for="entryDate">진입일</label><input id="entryDate" name="entryDate" type="date" required></div>
-        <div class="field"><label for="entryPrice">진입가 $ <button type="button" class="calcbtn" data-calc="entry">평균 계산</button></label><input id="entryPrice" name="entryPrice" type="number" step="any" min="0" required></div>
+        <div class="field"><label for="entryPrice">진입가 $ <button type="button" class="calcbtn" data-calc="entry">평균 계산</button></label><input id="entryPrice" name="entryPrice" type="text" inputmode="decimal" autocomplete="off" class="numin" required></div>
       </div>
       <div class="row2">
-        <div class="field"><label for="target">목표가 $</label><input id="target" name="target" type="number" step="any" min="0" placeholder="선택"></div>
-        <div class="field"><label for="stop">손절가 $</label><input id="stop" name="stop" type="number" step="any" min="0" placeholder="선택"></div>
+        <div class="field"><label for="target">목표가 $</label><input id="target" name="target" type="text" inputmode="decimal" autocomplete="off" class="numin" placeholder="선택"></div>
+        <div class="field"><label for="stop">손절가 $</label><input id="stop" name="stop" type="text" inputmode="decimal" autocomplete="off" class="numin" placeholder="선택"></div>
       </div>
       <div class="row2">
         <div class="field"><label for="exitDate">청산일</label><input id="exitDate" name="exitDate" type="date"></div>
-        <div class="field"><label for="exitPrice">청산가 $ <button type="button" class="calcbtn" data-calc="exit">평균 계산</button></label><input id="exitPrice" name="exitPrice" type="number" step="any" min="0"></div>
+        <div class="field"><label for="exitPrice">청산가 $ <button type="button" class="calcbtn" data-calc="exit">평균 계산</button></label><input id="exitPrice" name="exitPrice" type="text" inputmode="decimal" autocomplete="off" class="numin"></div>
       </div>
       <p class="hint">청산 칸을 비워두면 <b>보유 중</b>으로 남습니다. 나중에 왼쪽 표에서 그 줄을 눌러 채우세요.</p>
       <div class="row2">
-        <div class="field"><label for="fees">수수료 $</label><input id="fees" name="fees" type="number" step="any" min="0" placeholder="0"></div>
+        <div class="field"><label for="fees">수수료 $</label><input id="fees" name="fees" type="text" inputmode="decimal" autocomplete="off" class="numin" placeholder="0"></div>
         <div class="field"><label for="tag">전략</label>
           <input id="tag" name="tag" list="tags" placeholder="돌파" autocomplete="off"><datalist id="tags"></datalist></div>
       </div>
@@ -339,6 +339,10 @@ const held = t => Math.max(0, Math.round(((isOpen(t) ? Date.now() : new Date(t.e
 const usd = n => (n < 0 ? "−$" : "$") + Math.abs(n).toLocaleString("en-US", {minimumFractionDigits:2, maximumFractionDigits:2});
 const sgn = n => (n > 0 ? "+" : n < 0 ? "−" : "") + Math.abs(n).toFixed(2);
 const cls = n => n > 0 ? "up" : n < 0 ? "down" : "";
+// 숫자 칸은 type=text 다 — type=number 는 한글 입력기(IME)가 켜진 Chrome/Edge 에서 첫 글자 뒤가 안 들어가는 경우가 있다(2026-10-10 사용자 보고).
+// 그래서 받은 글자를 여기서 정리한다: 전각 숫자→반각, 쉼표·$·공백 제거.
+const NUM_FIELDS = ["qty", "entryPrice", "target", "stop", "exitPrice", "fees"];
+const cleanNum = s => String(s ?? "").replace(/[０-９．]/g, c => String.fromCharCode(c.charCodeAt(0) - 0xFEE0)).replace(/[,\s$]/g, "");
 const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 
 function stats(list){
@@ -659,6 +663,10 @@ $("#form").addEventListener("submit", async e => {
   }
   if(demo){ trades = []; demo = false; note(""); }   // 예시 데이터는 버리고 진짜 기록만 저장
   const f = Object.fromEntries(new FormData(e.target));
+  for(const k of NUM_FIELDS){
+    f[k] = cleanNum(f[k]);
+    if(f[k] !== "" && !(+f[k] >= 0)){ note(`숫자가 아닙니다: ${esc(e.target[k].previousElementSibling?.textContent.replace("평균 계산","").trim() || k)} "${esc(e.target[k].value)}"`, true); e.target[k].focus(); return; }
+  }
   if(!!f.exitDate !== !!f.exitPrice){ note("청산일과 청산가는 같이 넣거나 같이 비워야 합니다.", true); return; }
   const sh = f.side === "short", ep = +f.entryPrice;
   if(f.target && (sh ? +f.target >= ep : +f.target <= ep)){ note(sh ? "숏은 목표가가 진입가보다 낮아야 합니다." : "목표가가 진입가보다 높아야 합니다.", true); return; }
@@ -747,11 +755,11 @@ const DEMO = [
 /* ---------- 평균 단가 계산기 ---------- */
 let calcTarget = "entry";
 const calcRow = () => `<div class="crow">
-  <input type="number" step="any" min="0" class="c-qty" placeholder="수량" aria-label="수량">
-  <input type="number" step="any" min="0" class="c-price" placeholder="단가 $" aria-label="단가">
+  <input type="text" inputmode="decimal" autocomplete="off" class="numin c-qty" placeholder="수량" aria-label="수량">
+  <input type="text" inputmode="decimal" autocomplete="off" class="numin c-price" placeholder="단가 $" aria-label="단가">
   <button type="button" class="del c-del" aria-label="줄 삭제">×</button></div>`;
 const calcFills = () => [...document.querySelectorAll("#calc-rows .crow")]
-  .map(r => [+r.querySelector(".c-qty").value || 0, +r.querySelector(".c-price").value || 0]);
+  .map(r => [+cleanNum(r.querySelector(".c-qty").value) || 0, +cleanNum(r.querySelector(".c-price").value) || 0]);
 
 function calcRender(){
   const r = avgPrice(calcFills());
@@ -811,6 +819,7 @@ if(location.hash === "#selftest"){
   check("목표·손절 없거나 방향 틀리면 null", planRR({side:"long", entryPrice:100, target:120, stop:null}) === null
     && planRR({side:"long", entryPrice:100, target:90, stop:80}) === null);
   const open = {ticker:"D",side:"long",qty:10,entryDate:"2026-08-10",entryPrice:118.75,exitDate:null,exitPrice:null,fees:0};
+  check("숫자 칸 정리", cleanNum("184") === "184" && cleanNum("$1,840.50") === "1840.50" && cleanNum("１８４") === "184" && cleanNum(" 18 4 ") === "184" && !(+cleanNum("18a") >= 0));
   check("보유 중 판별", isOpen(open) && !isOpen(t1) && isOpen({...t1, exitPrice:null}));
   check("보유 중은 실현손익 제외", closed([t1,open,t3]).length === 2 && stats(closed([t1,open,t3])).total === 40);
   check("보유 중 보유일수는 오늘 기준", held(open) === Math.round((Date.now() - new Date("2026-08-10")) / 864e5));
