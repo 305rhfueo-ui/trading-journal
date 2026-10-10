@@ -128,6 +128,11 @@ tbody tr:hover{background:var(--surface-2)}
 tbody tr.editing{background:var(--brass-soft)}
 tbody tr.editing td:first-child{box-shadow:inset 3px 0 0 var(--brass)}
 .tick{font-family:"IBM Plex Mono",monospace; font-weight:600; letter-spacing:.02em}
+/* 상태 배지: 보유 / 승(청산 이익) / 패(청산 손실, 승률 계산과 같이 0 이하) */
+.st{display:inline-block; min-width:34px; text-align:center; font-size:12px; font-weight:700; padding:2px 7px; margin-right:8px; border-radius:4px}
+.st.hold{background:var(--brass-soft); color:var(--brass)}
+.st.win{background:var(--up-soft); color:var(--up)}
+.st.loss{background:var(--down-soft); color:var(--down)}
 .side{font-size:10.5px; padding:1px 5px; border-radius:4px; border:1px solid var(--line); color:var(--muted)}
 .side.s{color:var(--down); border-color:var(--down); background:var(--down-soft)}
 .pill{display:inline-block; padding:2px 8px; border-radius:999px; font-size:11.5px; font-weight:500}
@@ -601,7 +606,7 @@ function renderTable(list, s){
     const op = isOpen(t), p = op ? 0 : pnl(t), c = op ? 0 : pct(t);
     const u = op ? unrealized(t, prices) : null;
     return `<tr data-id="${t.id}" class="${editing === t.id ? "editing" : ""}" title="클릭하면 수정">
-      <td class="l"><span class="tick">${esc(t.ticker)}</span> <span class="side ${t.side === "short" ? "s" : ""}">${t.side === "short" ? "숏" : "롱"}</span></td>
+      <td class="l">${op ? '<span class="st hold">보유</span>' : p > 0 ? '<span class="st win">승</span>' : '<span class="st loss">패</span>'}<span class="tick">${esc(t.ticker)}</span> <span class="side ${t.side === "short" ? "s" : ""}">${t.side === "short" ? "숏" : "롱"}</span></td>
       <td class="num">${t.qty}</td>
       <td class="num">${t.entryDate.slice(2)} → ${op ? "보유 중" : t.exitDate.slice(5)}</td>
       <td class="num">${held(t)}일</td>
