@@ -32,12 +32,12 @@
   "qty": 21,
   "entryDate": "2026-10-02",
   "entryPrice": 200.92,
-  "exitDate": null,
-  "exitPrice": null,
+  "exitDate": "2026-10-09",
+  "exitPrice": 184,
   "target": null,
   "stop": 188,
   "fees": 0,
   "tag": "breakout",
-  "memo": "Breakout 전략에 따라 매수"
+  "memo": "Breakout 전략에 따라 매수\n손절가에 근접해 184불에 손절함"
  }
 ]
