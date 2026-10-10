@@ -68,21 +68,32 @@ async function main() {
     console.error('QQQ 실패, 이전 값 유지:', e.message);
   }
 
-  const last = { ...(prev.last || {}) };
-  for (const t of openTickers) {
+  // 종목별 일봉 이력 — 추이 그래프용. 거래한 모든 종목(청산 포함)을 첫 진입일부터 마지막 보유일까지만 남긴다.
+  const today = new Date().toISOString().slice(0, 10);
+  const span = {};
+  for (const t of trades) {
+    const k = String(t.ticker).toUpperCase(), open = !t.exitDate || t.exitPrice == null;
+    const end = open ? today : t.exitDate, s = span[k];
+    span[k] = s ? { from: t.entryDate < s.from ? t.entryDate : s.from, to: end > s.to ? end : s.to } : { from: t.entryDate, to: end };
+  }
+  const last = { ...(prev.last || {}) }, series = { ...(prev.series || {}) };
+  for (const [t, { from, to }] of Object.entries(span)) {
+    const days = (Date.now() - Date.parse(from)) / 864e5;
     try {
-      const series = await withRetry(() => fetchDaily(t, '5d'));
-      if (series.length) last[t] = series[series.length - 1];
-      console.log(t, last[t]);
+      const all = await withRetry(() => fetchDaily(t, days > 700 ? '5y' : days > 330 ? '2y' : '1y'));
+      series[t] = all.filter((p) => p.d >= from && p.d <= to);
+      if (openTickers.includes(t) && all.length) last[t] = all[all.length - 1];
+      console.log(t, `${series[t].length}봉`, openTickers.includes(t) ? last[t] : '(청산)');
     } catch (e) {
       console.error(t, '실패, 이전 값 유지:', e.message);
     }
     await new Promise((r) => setTimeout(r, 300)); // 야후 과호출 방지
   }
-  for (const k of Object.keys(last)) if (!openTickers.includes(k)) delete last[k]; // 청산된 종목은 정리
+  for (const k of Object.keys(last)) if (!openTickers.includes(k)) delete last[k]; // 청산된 종목은 현재가 불필요
+  for (const k of Object.keys(series)) if (!span[k]) delete series[k];         // 일지에서 지운 종목은 정리
 
-  fs.writeFileSync(OUT, JSON.stringify({ updated: new Date().toISOString(), qqq, last }, null, 1) + '\n');
-  console.log(`prices.json 갱신 — QQQ ${qqq.length}봉, 보유 종목 ${Object.keys(last).length}개`);
+  fs.writeFileSync(OUT, JSON.stringify({ updated: new Date().toISOString(), qqq, last, series }) + '\n');
+  console.log(`prices.json 갱신 — QQQ ${qqq.length}봉, 보유 종목 ${Object.keys(last).length}개, 이력 ${Object.keys(series).length}종목`);
 }
 
 main().catch((e) => { console.error(e); process.exit(1); });
