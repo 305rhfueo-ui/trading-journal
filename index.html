@@ -34,6 +34,7 @@
   --shadow:0 1px 2px rgba(0,0,0,.4),0 10px 30px -18px rgba(0,0,0,.9);
 }
 *{box-sizing:border-box}
+[hidden]{display:none !important}  /* .note{display:flex} 가 hidden 을 이겨 빈 줄·엉뚱한 문구가 보이던 것 */
 body{
   margin:0; background:var(--bg); color:var(--ink);
   font-family:"IBM Plex Sans KR",system-ui,-apple-system,"Malgun Gothic",sans-serif;
@@ -173,6 +174,11 @@ footer{margin-top:30px; color:var(--muted); font-size:12px; display:flex; flex-w
 kbd{font-family:"IBM Plex Mono",monospace; font-size:11px; border:1px solid var(--line); border-bottom-width:2px;
   border-radius:4px; padding:1px 5px; background:var(--surface)}
 .sec{margin-bottom:30px}
+.trades{margin-bottom:30px}
+.addbtn{width:auto; margin:0 0 0 auto; padding:6px 18px}
+dialog.entry{max-width:760px; padding:0}
+dialog.entry .note{margin:12px 16px 0}
+.dlg-hd-btns{display:flex; gap:6px}
 .sec-hd{display:flex; align-items:center; gap:10px; margin:0 0 12px; font-size:17px; font-weight:700; letter-spacing:-.01em}
 .sec-hd .no{display:inline-grid; place-items:center; width:24px; height:24px; border-radius:50%;
   background:var(--ink); color:var(--surface); font-size:13px; font-weight:700; flex:none}
@@ -198,6 +204,23 @@ kbd{font-family:"IBM Plex Mono",monospace; font-size:11px; border:1px solid var(
 </header>
 
 <p class="note" id="note" hidden></p>
+
+<div class="trades">
+  <div class="panel">
+    <div class="filters">
+      <input id="f-q" type="search" placeholder="종목 검색 (NVDA)" aria-label="종목 검색">
+      <select id="f-tag" aria-label="전략 필터"></select>
+      <select id="f-side" aria-label="방향 필터">
+        <option value="">방향 전체</option><option value="long">롱만</option><option value="short">숏만</option>
+      </select>
+      <select id="f-period" aria-label="기간 필터">
+        <option value="all">전체 기간</option><option value="90">최근 3개월</option><option value="ytd">올해</option>
+      </select>
+      <button class="submit addbtn" type="button" id="open-entry">+ 입력</button>
+    </div>
+    <div class="tablewrap"><table id="table"></table></div>
+  </div>
+</div>
 
 <section class="sec">
   <h2 class="sec-hd"><span class="no">1</span>평가손익 <small>아직 안 판 종목 · 최근 영업일 종가 기준</small></h2>
@@ -238,27 +261,19 @@ kbd{font-family:"IBM Plex Mono",monospace; font-size:11px; border:1px solid var(
   </div>
 </section>
 
-<div class="cols">
-  <div class="panel">
-    <div class="filters">
-      <input id="f-q" type="search" placeholder="종목 검색 (NVDA)" aria-label="종목 검색">
-      <select id="f-tag" aria-label="전략 필터"></select>
-      <select id="f-side" aria-label="방향 필터">
-        <option value="">방향 전체</option><option value="long">롱만</option><option value="short">숏만</option>
-      </select>
-      <select id="f-period" aria-label="기간 필터">
-        <option value="all">전체 기간</option><option value="90">최근 3개월</option><option value="ytd">올해</option>
-      </select>
-    </div>
-    <div class="tablewrap"><table id="table"></table></div>
-  </div>
+<footer>
+  <span>정적 페이지 하나 + trades.json · 서버 없음</span>
+  <span>읽기는 로그인 없이 · 쓰기만 <kbd>PAT</kbd></span>
+</footer>
+</div>
 
-  <div class="panel">
-    <div class="panel-hd">
-      <h2 id="form-title">거래 기록</h2>
-      <button class="ghost" type="button" id="cancel-edit" hidden>수정 취소</button>
-    </div>
-    <form id="form">
+<dialog id="entry" class="entry" aria-labelledby="form-title">
+  <div class="panel-hd">
+    <h2 id="form-title">거래 기록</h2>
+    <span class="dlg-hd-btns"><button class="ghost" type="button" id="cancel-edit" hidden>수정 취소</button><button class="ghost" type="button" id="close-entry" aria-label="닫기">닫기</button></span>
+  </div>
+  <p class="note err" id="entry-note" hidden></p>
+  <form id="form">
       <div class="row2">
         <div class="field"><label for="ticker">종목</label>
           <input id="ticker" name="ticker" required placeholder="NVDA" autocomplete="off"></div>
@@ -282,7 +297,7 @@ kbd{font-family:"IBM Plex Mono",monospace; font-size:11px; border:1px solid var(
         <div class="field"><label for="exitDate">청산일</label><input id="exitDate" name="exitDate" type="date"></div>
         <div class="field"><label for="exitPrice">청산가 $ <button type="button" class="calcbtn" data-calc="exit">평균 계산</button></label><input id="exitPrice" name="exitPrice" type="text" inputmode="decimal" autocomplete="off" class="numin"></div>
       </div>
-      <p class="hint">청산 칸을 비워두면 <b>보유 중</b>으로 남습니다. 나중에 왼쪽 표에서 그 줄을 눌러 채우세요.</p>
+      <p class="hint">청산 칸을 비워두면 <b>보유 중</b>으로 남습니다. 나중에 표에서 그 줄을 눌러 채우세요.</p>
       <div class="row2">
         <div class="field"><label for="fees">수수료 $</label><input id="fees" name="fees" type="text" inputmode="decimal" autocomplete="off" class="numin" placeholder="0"></div>
         <div class="field"><label for="tag">전략</label>
@@ -292,14 +307,7 @@ kbd{font-family:"IBM Plex Mono",monospace; font-size:11px; border:1px solid var(
       <button class="submit" id="submit" type="submit">기록하고 커밋</button>
       <p class="hint" id="need-setup" hidden style="margin:8px 0 0">기록하려면 <b>설정</b>에서 저장소와 쓰기 토큰을 먼저 넣으세요.</p>
     </form>
-  </div>
-</div>
-
-<footer>
-  <span>정적 페이지 하나 + trades.json · 서버 없음</span>
-  <span>읽기는 로그인 없이 · 쓰기만 <kbd>PAT</kbd></span>
-</footer>
-</div>
+</dialog>
 
 <dialog id="settings">
   <form method="dialog" id="settings-form">
@@ -435,6 +443,8 @@ function note(msg, isErr){
   const el = $("#note");
   el.hidden = !msg; el.className = "note" + (isErr ? " err" : "");
   el.innerHTML = msg || "";
+  const en = $("#entry-note");           // 입력 팝업이 열려 있으면 그 안에도 같은 문구
+  if(en){ en.hidden = !msg || !$("#entry").open; en.className = el.className; en.innerHTML = msg || ""; }
 }
 
 /* ---------- GitHub Contents API ---------- */
@@ -790,8 +800,14 @@ function startEdit(id){
   $("#submit").textContent = isOpen(t) ? "청산 기록하고 커밋" : "수정하고 커밋";
   $("#cancel-edit").hidden = false;
   render();
+  openEntry();
   (isOpen(t) ? f.exitDate : f.ticker).focus();
-  $("#form").scrollIntoView({block: "nearest", behavior: "smooth"});
+}
+// 입력 팝업 — "+ 입력" 버튼(새 거래) 또는 표의 줄 클릭(수정)으로 연다
+function openEntry(){
+  const d = $("#entry");
+  $("#entry-note").hidden = true;
+  if(!d.open) d.showModal();
 }
 function cancelEdit(){
   editing = null;
@@ -799,9 +815,13 @@ function cancelEdit(){
   $("#form-title").textContent = "거래 기록";
   $("#submit").textContent = "기록하고 커밋";
   $("#cancel-edit").hidden = true;
+  $("#entry").close();
   render();
 }
 $("#cancel-edit").addEventListener("click", cancelEdit);
+$("#close-entry").addEventListener("click", () => editing ? cancelEdit() : $("#entry").close());
+$("#entry").addEventListener("close", () => { if(editing) cancelEdit(); });   // Esc 로 닫아도 수정 상태를 푼다
+$("#open-entry").addEventListener("click", () => { if(editing) cancelEdit(); $("#form").reset(); openEntry(); $("#ticker").focus(); });
 
 $("#form").addEventListener("submit", async e => {
   e.preventDefault();
@@ -835,7 +855,7 @@ $("#form").addEventListener("submit", async e => {
     if(await save(`edit ${t.ticker} ${t.entryDate} ${what}`)) cancelEdit();
   }else{
     trades.push(t); render();
-    if(await save(`add ${t.ticker} ${t.entryDate} ${what}`)) e.target.reset();
+    if(await save(`add ${t.ticker} ${t.entryDate} ${what}`)) { e.target.reset(); $("#entry").close(); }
   }
 });
 
