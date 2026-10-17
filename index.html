@@ -115,6 +115,8 @@ button{font:inherit; cursor:pointer}
 .seg label{flex:1; margin:0; text-align:center; font-size:12.5px; letter-spacing:0; text-transform:none;
   background:var(--surface-2); color:var(--muted); cursor:pointer}
 .seg input{position:absolute; opacity:0; width:0; height:0}
+.seg input:disabled + span{opacity:.55; cursor:not-allowed}
+#side-lock{font-size:10px; color:var(--muted); text-transform:none; letter-spacing:0}
 .seg span{display:block; flex:1; padding:7px 0}  /* 롱/숏 선택 표시가 글자 폭만큼 가늘게 나오던 것 */
 .seg label:has(input:checked) span{background:var(--ink); color:var(--surface)}
 .hint{margin:-4px 0 10px; font-size:11.5px; color:var(--muted)}
@@ -277,10 +279,10 @@ dialog.entry .note{margin:12px 16px 0}
       <div class="row2">
         <div class="field"><label for="ticker">종목</label>
           <input id="ticker" name="ticker" required placeholder="NVDA" autocomplete="off"></div>
-        <div class="field"><label for="side-l">방향</label>
+        <div class="field"><label for="side-l">방향 <small id="side-lock" hidden>진입 때 정함 · 바꿀 수 없음</small></label>
           <div class="seg">
-            <label><input type="radio" id="side-l" name="side" value="long" checked><span>롱</span></label>
-            <label><input type="radio" id="side-s" name="side" value="short"><span>숏</span></label>
+            <label><input type="radio" id="side-l" name="side" value="long" checked><span>롱 (매수)</span></label>
+            <label><input type="radio" id="side-s" name="side" value="short"><span>숏 (공매도)</span></label>
           </div></div>
       </div>
       <div class="field"><label for="qty">수량</label>
@@ -799,6 +801,7 @@ function startEdit(id){
   $("#form-title").textContent = `${t.ticker} 수정`;
   $("#submit").textContent = isOpen(t) ? "청산 기록하고 커밋" : "수정하고 커밋";
   $("#cancel-edit").hidden = false;
+  lockSide(true);
   render();
   openEntry();
   (isOpen(t) ? f.exitDate : f.ticker).focus();
@@ -809,12 +812,17 @@ function openEntry(){
   $("#entry-note").hidden = true;
   if(!d.open) d.showModal();
 }
+function lockSide(on){
+  for(const el of document.querySelectorAll("input[name=side]")) el.disabled = on;
+  $("#side-lock").hidden = !on;
+}
 function cancelEdit(){
   editing = null;
   $("#form").reset();
   $("#form-title").textContent = "거래 기록";
   $("#submit").textContent = "기록하고 커밋";
   $("#cancel-edit").hidden = true;
+  lockSide(false);
   $("#entry").close();
   render();
 }
@@ -837,12 +845,13 @@ $("#form").addEventListener("submit", async e => {
     if(f[k] !== "" && !(+f[k] >= 0)){ note(`숫자가 아닙니다: ${esc(e.target[k].previousElementSibling?.textContent.replace("평균 계산","").trim() || k)} "${esc(e.target[k].value)}"`, true); e.target[k].focus(); return; }
   }
   if(!!f.exitDate !== !!f.exitPrice){ note("청산일과 청산가는 같이 넣거나 같이 비워야 합니다.", true); return; }
-  const sh = f.side === "short", ep = +f.entryPrice;
+  const side = editing != null ? trades.find(x => x.id === editing).side : f.side;
+  const sh = side === "short", ep = +f.entryPrice;
   if(f.target && (sh ? +f.target >= ep : +f.target <= ep)){ note(sh ? "숏은 목표가가 진입가보다 낮아야 합니다." : "목표가가 진입가보다 높아야 합니다.", true); return; }
   if(f.stop && (sh ? +f.stop <= ep : +f.stop >= ep)){ note(sh ? "숏은 손절가가 진입가보다 높아야 합니다." : "손절가가 진입가보다 낮아야 합니다.", true); return; }
   if(f.exitDate && f.exitDate < f.entryDate){ note("청산일이 진입일보다 빠릅니다.", true); return; }
   const t = {
-    id: editing ?? Date.now(), ticker: f.ticker.trim().toUpperCase(), side: f.side,
+    id: editing ?? Date.now(), ticker: f.ticker.trim().toUpperCase(), side,
     qty: +f.qty, entryDate: f.entryDate, entryPrice: +f.entryPrice,
     exitDate: f.exitDate || null, exitPrice: f.exitPrice ? +f.exitPrice : null,
     target: f.target ? +f.target : null, stop: f.stop ? +f.stop : null,
