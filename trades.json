@@ -41,5 +41,20 @@
   "fees": 0,
   "tag": "breakout",
   "memo": "Breakout 전략에 따라 매수\n손절가에 근접해 184불에 손절함"
+ },
+ {
+  "id": 1793162159010,
+  "ticker": "ZS",
+  "side": "long",
+  "qty": 47,
+  "entryDate": "2026-10-26",
+  "entryPrice": 260.33,
+  "exitDate": null,
+  "exitPrice": null,
+  "target": null,
+  "stop": null,
+  "fees": 0,
+  "tag": "breakout",
+  "memo": "breakout 전략에 따라 매수"
  }
 ]
